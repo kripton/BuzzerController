@@ -47,5 +47,6 @@ private slots:
     void pingTimeout();
     void armedButtonClicked();
     void updateActiveBuzzerLabel();
+    void resetTriggerDisplay();
 };
 #endif // MAINWINDOW_H

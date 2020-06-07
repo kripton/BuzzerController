@@ -34,13 +34,26 @@ MainWindow::MainWindow(QWidget *parent)
         // Save pointer to the GroupBox in buzzers object
         val.insert("groupBox", QJsonValue(QString("%1").arg((qint64)gb)));
 
-        // Label that displays info about that buzzer
+        // Label that displays info about that buzzer (from PING packet)
         // bgcolor depends on status
         QLabel *statusLabel = new QLabel(tr("Ping: NOK\nIP: ???.???.???.???\nBat: ?.??V\nE1.31 status: ???"));
         statusLabel->setStyleSheet("border: 1px solid black; color: white; background: darkred;");
         gbL->addWidget(statusLabel);
         // Save pointer to the Label in buzzers object
         val.insert("statusLabel", QJsonValue(QString("%1").arg((qint64)statusLabel)));
+
+        // Label that displays if that buzzer has just been triggered (for 2 seconds)
+        QLabel *trgdLabel = new QLabel(tr("idle"));
+        trgdLabel->setAlignment(Qt::AlignCenter | Qt::AlignHCenter);
+        trgdLabel->setStyleSheet("border: 1px solid black; color: black; background: white;");
+        gbL->addWidget(trgdLabel);
+        // Save pointer to the Label in buzzers object
+        val.insert("trgdLabel", QJsonValue(QString("%1").arg((qint64)trgdLabel)));
+        // Plus timer that resets it to normal
+        QTimer *trgdTimer = new QTimer;
+        trgdTimer->setSingleShot(true);
+        connect(trgdTimer, &QTimer::timeout, this, &MainWindow::resetTriggerDisplay);
+        val.insert("trgdTimer", QJsonValue(QString("%1").arg((qint64)trgdTimer)));
 
         // Create a timer that turns the statusLabel red again when no ping came in for 5 seconds
         QTimer *statusTimer = new QTimer;
@@ -164,6 +177,23 @@ void MainWindow::processPendingDatagrams()
             QString buzzerName = oscPath.split('/')[2];
             qDebug() << "buzzerName:" << buzzerName;
 
+            // Display that this buzzer has been triggered in all cases
+            QJsonArray::iterator i;
+            for (i = buzzers.begin(); i != buzzers.end(); ++i) {
+                QJsonObject val = (*i).toObject();
+
+                if (val["name"] == buzzerName) {
+                    QLabel* trgdLabel = (QLabel*)val["trgdLabel"].toString().toLongLong();
+                    trgdLabel->setText(tr("TRIGGERED"));
+                    trgdLabel->setStyleSheet("border: 1px solid black; color: white; background: black;");
+
+                    // (Re-)start the ping timeout timer
+                    QTimer* trgdTimer = (QTimer*)val["trgdTimer"].toString().toLongLong();
+                    trgdTimer->start(2000);
+                    break;
+                }
+            }
+
             // If not armed => do nothing
             if (!armed) {
                 continue;
@@ -191,9 +221,19 @@ void MainWindow::updateStatusLabel(QString buzzerName, QString sourceAddress, fl
         QJsonObject val = (*i).toObject();
 
         if (val["name"] == buzzerName) {
+            QString bgColor;
+
+            if (batVolt <= 6.2) {
+                bgColor = "orange";
+            } else if (e131_status == 0) {
+                bgColor = "darkblue";
+            } else {
+                bgColor = "darkgreen";
+            }
+
             QLabel* statusLabel = (QLabel*)val["statusLabel"].toString().toLongLong();
             statusLabel->setText(tr("Ping: OK\nIP: %1\nBat: %2V\nE1.31 status: %3").arg(sourceAddress).arg(QString::number(batVolt, 'f', 2)).arg(e131_status));
-            statusLabel->setStyleSheet("border: 1px solid black; color: white; background: darkgreen");
+            statusLabel->setStyleSheet(QString("border: 1px solid black; color: white; background: %1;").arg(bgColor));
 
             val["lastIP"] = sourceAddress;
             val["lastBatVolt"] = batVolt;
@@ -262,5 +302,22 @@ void MainWindow::updateActiveBuzzerLabel()
         activeLabel->setText(tr("No Buzzer active"));
     }
     activeLabel->setStyleSheet(QString("border: 1px solid black; %1").arg(buttonColorToStyleSheet(activeBuzzer)));
+}
+
+void MainWindow::resetTriggerDisplay()
+{
+    QTimer *sender = (QTimer*)QObject::sender();
+
+    QJsonArray::iterator i;
+    for (i = buzzers.begin(); i != buzzers.end(); ++i) {
+        QJsonObject val = (*i).toObject();
+
+        if ((QTimer*)val["trgdTimer"].toString().toLongLong() == sender) {
+            QLabel* trgdLabel = (QLabel*)val["trgdLabel"].toString().toLongLong();
+            trgdLabel->setText(tr("idle"));
+            trgdLabel->setStyleSheet("border: 1px solid black; color: black; background: white;");
+            break;
+        }
+    }
 }
 
