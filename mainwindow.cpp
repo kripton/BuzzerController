@@ -8,7 +8,7 @@ MainWindow::MainWindow(QWidget *parent)
     QString buzzerInfo = "[\
         {\"name\": \"red\"},\
         {\"name\": \"blue\"},\
-        {\"name\": \"lime\"},\
+        {\"name\": \"green\"},\
         {\"name\": \"yellow\"},\
         {\"name\": \"magenta\"},\
         {\"name\": \"cyan\"}\
@@ -27,9 +27,7 @@ MainWindow::MainWindow(QWidget *parent)
 
         // GroupBox that has the bgcolor of that buzzer
         QGroupBox *gb = new QGroupBox(tr("Buzzer %1 - %2").arg(j).arg(val["name"].toString().toUpper()));
-        QPalette pal = gb->palette();
-        pal.setColor(QPalette::Background, QColor(val["name"].toString()));
-        gb->setPalette(pal);
+        gb->setStyleSheet(buttonColorToStyleSheet(val["name"].toString()));
         groupBoxLayout->addWidget(gb);
         QVBoxLayout *gbL = new QVBoxLayout;
         gb->setLayout(gbL);
@@ -39,7 +37,7 @@ MainWindow::MainWindow(QWidget *parent)
         // Label that displays info about that buzzer
         // bgcolor depends on status
         QLabel *statusLabel = new QLabel(tr("Ping: NOK\nIP: ???.???.???.???\nBat: ?.??V\nE1.31 status: ???"));
-        statusLabel->setStyleSheet("border: 1px solid black; color: white; background: darkred");
+        statusLabel->setStyleSheet("border: 1px solid black; color: white; background: darkred;");
         gbL->addWidget(statusLabel);
         // Save pointer to the Label in buzzers object
         val.insert("statusLabel", QJsonValue(QString("%1").arg((qint64)statusLabel)));
@@ -58,15 +56,14 @@ MainWindow::MainWindow(QWidget *parent)
 
     qDebug() << buzzers;
 
-    QPushButton *armedButton = new QPushButton(tr("Buzzer NOT ARMED"));
+    armedButton = new QPushButton();
     armedButton->setMinimumHeight(60);
-    armedButton->setStyleSheet("border: 1px solid black; background: white; color: black;");
     mainLayout->addWidget(armedButton);
+    connect(armedButton, &QPushButton::clicked, this, &MainWindow::armedButtonClicked);
 
-    QLabel *activeLabel = new QLabel(tr("No Buzzer active"));
+    activeLabel = new QLabel();
     activeLabel->setAlignment(Qt::AlignCenter | Qt::AlignHCenter);
     activeLabel->setMinimumHeight(60);
-    activeLabel->setStyleSheet("border: 1px solid black; background: white; color: black;");
     mainLayout->addWidget(activeLabel);
 
     QWidget *centralWidget = new QWidget();
@@ -75,6 +72,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     this->setWindowTitle(tr("Buzzer controller"));
     this->resize(820, 300);
+
+    activeBuzzer = "";
+
+    // Fake ARM the buzzers, and disarm is using the function
+    // that updates all labels
+    armed = 1;
+    armedButtonClicked();
 
     oscSock.bind(6206, QUdpSocket::ShareAddress);
     connect(&oscSock, &QUdpSocket::readyRead, this, &MainWindow::processPendingDatagrams);
@@ -85,6 +89,25 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
 
+}
+
+QString MainWindow::buttonColorToStyleSheet(QString buzzerColorName)
+{
+    if (buzzerColorName == "red") {
+        return "color: black; background: red;";
+    } else if (buzzerColorName == "blue") {
+        return "color: white; background: blue;";
+    } else if (buzzerColorName == "green") {
+        return "color: black; background: lime;";
+    } else if (buzzerColorName == "yellow") {
+        return "color: black; background: yellow;";
+    } else if (buzzerColorName == "magenta") {
+        return "color: black; background: magenta;";
+    } else if (buzzerColorName == "cyan") {
+        return "color: black; background: cyan;";
+    } else {
+        return "color: black; background: white;";
+    }
 }
 
 void MainWindow::processPendingDatagrams()
@@ -140,6 +163,20 @@ void MainWindow::processPendingDatagrams()
 
             QString buzzerName = oscPath.split('/')[2];
             qDebug() << "buzzerName:" << buzzerName;
+
+            // If not armed => do nothing
+            if (!armed) {
+                continue;
+            }
+
+            // If another buzzer is still active => do nothing
+            if (activeBuzzer.length() > 1) {
+                continue;
+            }
+
+            activeBuzzer = buzzerName;
+
+            updateActiveBuzzerLabel();
 
             continue;
         }
@@ -197,5 +234,33 @@ void MainWindow::pingTimeout()
             return;
         }
     }
+}
+
+void MainWindow::armedButtonClicked()
+{
+    if (!armed) {
+        armed = 1;
+        activeBuzzer = "";
+        armedButton->setText(tr("Buzzer ARMED. Click to DISARM."));
+        armedButton->setStyleSheet("border: 1px solid black; background: black; color: white;");
+    } else {
+        armed = 0;
+        activeBuzzer = "";
+        armedButton->setText(tr("Buzzer NOT ARMED. Click to ARM."));
+        armedButton->setStyleSheet("border: 1px solid black; background: white; color: black;");
+    }
+
+    updateActiveBuzzerLabel();
+}
+
+void MainWindow::updateActiveBuzzerLabel()
+{
+    if (activeBuzzer.length() > 1) {
+        activeLabel->setText(tr("BUZZER %1 ACTIVE").arg(activeBuzzer.toUpper()));
+        activeLabel->setStyleSheet(QString("border: 1px solid black; %1").arg(buttonColorToStyleSheet(activeBuzzer)));
+    } else {
+        activeLabel->setText(tr("No Buzzer active"));
+    }
+    activeLabel->setStyleSheet(QString("border: 1px solid black; %1").arg(buttonColorToStyleSheet(activeBuzzer)));
 }
 

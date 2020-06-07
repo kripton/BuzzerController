@@ -32,6 +32,11 @@ public:
 private:
     QUdpSocket oscSock;
     QJsonArray buzzers;
+    int armed = 0;
+    QString activeBuzzer = "";
+    QPushButton *armedButton;
+    QLabel *activeLabel;
+    QString buttonColorToStyleSheet(QString buzzerColorName);
 
 signals:
     void pingReceived(QString buzzerName, QString sourceAddress, float batVolt, quint32 e131_status);
@@ -40,5 +45,7 @@ private slots:
     void processPendingDatagrams();
     void updateStatusLabel(QString buzzerName, QString sourceAddress, float batVolt, quint32 e131_status);
     void pingTimeout();
+    void armedButtonClicked();
+    void updateActiveBuzzerLabel();
 };
 #endif // MAINWINDOW_H
