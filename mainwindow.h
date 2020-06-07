@@ -10,7 +10,12 @@
 #include <QVBoxLayout>
 #include <QGroupBox>
 #include <QLabel>
+#include <QPushButton>
 #include <QGroupBox>
+#include <QTimer>
+
+#include <QtNetwork/QUdpSocket>
+#include <QtNetwork/QNetworkDatagram>
 
 QT_BEGIN_NAMESPACE
 class MainWindow;
@@ -23,5 +28,17 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+private:
+    QUdpSocket oscSock;
+    QJsonArray buzzers;
+
+signals:
+    void pingReceived(QString buzzerName, QString sourceAddress, float batVolt, quint32 e131_status);
+
+private slots:
+    void processPendingDatagrams();
+    void updateStatusLabel(QString buzzerName, QString sourceAddress, float batVolt, quint32 e131_status);
+    void pingTimeout();
 };
 #endif // MAINWINDOW_H
