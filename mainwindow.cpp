@@ -88,13 +88,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     activeBuzzer = "";
 
+    qDebug() << "UDP BIND:" << oscSock.bind(6206, QUdpSocket::ShareAddress);
+    connect(&oscSock, &QUdpSocket::readyRead, this, &MainWindow::processPendingDatagrams);
+
     // Fake ARM the buzzers, and disarm is using the function
     // that updates all labels
     armed = 1;
     armedButtonClicked();
-
-    oscSock.bind(6206, QUdpSocket::ShareAddress);
-    connect(&oscSock, &QUdpSocket::readyRead, this, &MainWindow::processPendingDatagrams);
 
     connect(this, &MainWindow::pingReceived, this, &MainWindow::updateStatusLabel);
 }
@@ -221,9 +221,9 @@ void MainWindow::updateStatusLabel(QString buzzerName, QString sourceAddress, fl
         QJsonObject val = (*i).toObject();
 
         if (val["name"] == buzzerName) {
-            QString bgColor;
 
-            if (batVolt <= 6.2) {
+            QString bgColor;
+            if (batVolt <= 6.5) {
                 bgColor = "orange";
             } else if (e131_status == 0) {
                 bgColor = "darkblue";
@@ -231,9 +231,14 @@ void MainWindow::updateStatusLabel(QString buzzerName, QString sourceAddress, fl
                 bgColor = "darkgreen";
             }
 
+            QString fgColor = "white";
+            if (bgColor == "orange") {
+                fgColor = "black";
+            }
+
             QLabel* statusLabel = (QLabel*)val["statusLabel"].toString().toLongLong();
             statusLabel->setText(tr("Ping: OK\nIP: %1\nBat: %2V\nE1.31 status: %3").arg(sourceAddress).arg(QString::number(batVolt, 'f', 2)).arg(e131_status));
-            statusLabel->setStyleSheet(QString("border: 1px solid black; color: white; background: %1;").arg(bgColor));
+            statusLabel->setStyleSheet(QString("border: 1px solid black; color: %1; background: %2;").arg(fgColor).arg(bgColor));
 
             val["lastIP"] = sourceAddress;
             val["lastBatVolt"] = batVolt;
@@ -278,17 +283,35 @@ void MainWindow::pingTimeout()
 
 void MainWindow::armedButtonClicked()
 {
+    QNetworkDatagram dgram(QByteArray(), QHostAddress("255.255.255.255"), 7206);
+    QByteArray data = QByteArray();
+    data.append("/buzzer/arm");
+    data.append((char)0);
+
+    data.append(",i");
+    data.append((char)0);
+    data.append((char)0);
+
+    data.append((char)0);
+    data.append((char)0);
+    data.append((char)0);
+
     if (!armed) {
         armed = 1;
         activeBuzzer = "";
         armedButton->setText(tr("Buzzer ARMED. Click to DISARM."));
         armedButton->setStyleSheet("border: 1px solid black; background: black; color: white;");
+        data.append((char)1);
     } else {
         armed = 0;
         activeBuzzer = "";
         armedButton->setText(tr("Buzzer NOT ARMED. Click to ARM."));
         armedButton->setStyleSheet("border: 1px solid black; background: white; color: black;");
+        data.append((char)0);
     }
+
+    dgram.setData(data);
+    qDebug() << oscSock.writeDatagram(dgram);
 
     updateActiveBuzzerLabel();
 }
