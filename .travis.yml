@@ -20,6 +20,7 @@ matrix:
     - brew link qt5 --force
     script:
     - qmake .
+    - ls -la
     - xcodebuild -list -project BuzzerController.xcodeproj
     - xcodebuild -scheme BuzzerController build
   - os: windows
