@@ -48,5 +48,8 @@ private slots:
     void armedButtonClicked();
     void updateActiveBuzzerLabel();
     void resetTriggerDisplay();
+    void trgdButtonClicked();
+    void triggerBuzzer(QString buzzerName);
+    void sendOSC(QString path, char value);
 };
 #endif // MAINWINDOW_H

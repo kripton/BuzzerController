@@ -43,12 +43,12 @@ MainWindow::MainWindow(QWidget *parent)
         val.insert("statusLabel", QJsonValue(QString("%1").arg((qint64)statusLabel)));
 
         // Label that displays if that buzzer has just been triggered (for 2 seconds)
-        QLabel *trgdLabel = new QLabel(tr("idle"));
-        trgdLabel->setAlignment(Qt::AlignCenter | Qt::AlignHCenter);
-        trgdLabel->setStyleSheet("border: 1px solid black; color: black; background: white;");
-        gbL->addWidget(trgdLabel);
+        QPushButton *trgdButton = new QPushButton(tr("idle"));
+        trgdButton->setStyleSheet("border: 1px solid black; color: black; background: white;");
+        gbL->addWidget(trgdButton);
         // Save pointer to the Label in buzzers object
-        val.insert("trgdLabel", QJsonValue(QString("%1").arg((qint64)trgdLabel)));
+        val.insert("trgdButton", QJsonValue(QString("%1").arg((qint64)trgdButton)));
+        connect(trgdButton, &QPushButton::clicked, this, &MainWindow::trgdButtonClicked);
         // Plus timer that resets it to normal
         QTimer *trgdTimer = new QTimer;
         trgdTimer->setSingleShot(true);
@@ -177,36 +177,7 @@ void MainWindow::processPendingDatagrams()
             QString buzzerName = oscPath.split('/')[2];
             qDebug() << "buzzerName:" << buzzerName;
 
-            // Display that this buzzer has been triggered in all cases
-            QJsonArray::iterator i;
-            for (i = buzzers.begin(); i != buzzers.end(); ++i) {
-                QJsonObject val = (*i).toObject();
-
-                if (val["name"] == buzzerName) {
-                    QLabel* trgdLabel = (QLabel*)val["trgdLabel"].toString().toLongLong();
-                    trgdLabel->setText(tr("TRIGGERED"));
-                    trgdLabel->setStyleSheet("border: 1px solid black; color: white; background: black;");
-
-                    // (Re-)start the ping timeout timer
-                    QTimer* trgdTimer = (QTimer*)val["trgdTimer"].toString().toLongLong();
-                    trgdTimer->start(2000);
-                    break;
-                }
-            }
-
-            // If not armed => do nothing
-            if (!armed) {
-                continue;
-            }
-
-            // If another buzzer is still active => do nothing
-            if (activeBuzzer.length() > 1) {
-                continue;
-            }
-
-            activeBuzzer = buzzerName;
-
-            updateActiveBuzzerLabel();
+            triggerBuzzer(buzzerName);
 
             continue;
         }
@@ -283,35 +254,27 @@ void MainWindow::pingTimeout()
 
 void MainWindow::armedButtonClicked()
 {
-    QNetworkDatagram dgram(QByteArray(), QHostAddress("255.255.255.255"), 7206);
-    QByteArray data = QByteArray();
-    data.append("/buzzer/arm");
-    data.append((char)0);
-
-    data.append(",i");
-    data.append((char)0);
-    data.append((char)0);
-
-    data.append((char)0);
-    data.append((char)0);
-    data.append((char)0);
+    // Turn off all buzzer chasers
+    QJsonArray::iterator i;
+    for (i = buzzers.begin(); i != buzzers.end(); ++i) {
+        QJsonObject val = (*i).toObject();
+        sendOSC("/buzzer/processed/" + val["name"].toString(), 0);
+    }
 
     if (!armed) {
         armed = 1;
         activeBuzzer = "";
         armedButton->setText(tr("Buzzer ARMED. Click to DISARM."));
         armedButton->setStyleSheet("border: 1px solid black; background: black; color: white;");
-        data.append((char)1);
+        sendOSC("/buzzer/arm", (char)255);
+
     } else {
         armed = 0;
         activeBuzzer = "";
         armedButton->setText(tr("Buzzer NOT ARMED. Click to ARM."));
         armedButton->setStyleSheet("border: 1px solid black; background: white; color: black;");
-        data.append((char)0);
+        sendOSC("/buzzer/arm", 0);
     }
-
-    dgram.setData(data);
-    qDebug() << oscSock.writeDatagram(dgram);
 
     updateActiveBuzzerLabel();
 }
@@ -336,11 +299,87 @@ void MainWindow::resetTriggerDisplay()
         QJsonObject val = (*i).toObject();
 
         if ((QTimer*)val["trgdTimer"].toString().toLongLong() == sender) {
-            QLabel* trgdLabel = (QLabel*)val["trgdLabel"].toString().toLongLong();
-            trgdLabel->setText(tr("idle"));
-            trgdLabel->setStyleSheet("border: 1px solid black; color: black; background: white;");
+            QPushButton* trgdButton = (QPushButton*)val["trgdButton"].toString().toLongLong();
+            trgdButton->setText(tr("idle"));
+            trgdButton->setStyleSheet("border: 1px solid black; color: black; background: white;");
             break;
         }
     }
+}
+
+void MainWindow::trgdButtonClicked()
+{
+    QPushButton* sender = (QPushButton*)QObject::sender();
+    QJsonArray::iterator i;
+    for (i = buzzers.begin(); i != buzzers.end(); ++i) {
+        QJsonObject val = (*i).toObject();
+
+        if ((QPushButton*)val["trgdButton"].toString().toLongLong() == sender) {
+            triggerBuzzer(val["name"].toString());
+        }
+    }
+}
+
+void MainWindow::triggerBuzzer(QString buzzerName)
+{
+    // Display that this buzzer has been triggered in all cases
+    QJsonArray::iterator i;
+    for (i = buzzers.begin(); i != buzzers.end(); ++i) {
+        QJsonObject val = (*i).toObject();
+
+        if (val["name"] == buzzerName) {
+            QPushButton* trgdButton = (QPushButton*)val["trgdButton"].toString().toLongLong();
+            trgdButton->setText(tr("TRIGGERED"));
+            trgdButton->setStyleSheet("border: 1px solid black; color: white; background: black;");
+
+            // (Re-)start the ping timeout timer
+            QTimer* trgdTimer = (QTimer*)val["trgdTimer"].toString().toLongLong();
+            trgdTimer->start(2000);
+            break;
+        }
+    }
+
+    // If not armed => do nothing
+    if (!armed) {
+        return;
+    }
+
+    // If another buzzer is still active => do nothing
+    if (activeBuzzer.length() > 1) {
+        return;
+    }
+
+    // Disarm the buzzers to disable the arm chaser
+    armedButtonClicked();
+
+    activeBuzzer = buzzerName;
+    sendOSC("/buzzer/processed/" + buzzerName, (char)255);
+
+    updateActiveBuzzerLabel();
+}
+
+void MainWindow::sendOSC(QString path, char value)
+{
+    QNetworkDatagram dgram(QByteArray(), QHostAddress("127.0.0.1"), 7206);
+    QByteArray data = QByteArray();
+    data.append(path);
+    data.append((char)0);
+
+    while(data.length() % 4) {
+        data.append((char)0);
+    }
+
+    data.append(",i");
+    data.append((char)0);
+    data.append((char)0);
+
+    data.append((char)0);
+    data.append((char)0);
+    data.append((char)0);
+
+    data.append((char)value);
+
+    dgram.setData(data);
+    qDebug() << "WRITTEN:" << oscSock.writeDatagram(dgram);
 }
 
