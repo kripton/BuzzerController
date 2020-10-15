@@ -3,7 +3,16 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    QVBoxLayout *mainLayout = new QVBoxLayout;
+    QHBoxLayout *mainLayout = new QHBoxLayout;
+
+    QVBoxLayout *leftLayout = new QVBoxLayout;
+
+    QLabel *availableBuzzersLabel = new QLabel(tr("Available buzzers:"));
+    leftLayout->addWidget(availableBuzzersLabel);
+
+    mainLayout->addLayout(leftLayout);
+
+    QVBoxLayout *rightLayout = new QVBoxLayout;
 
     QString buzzerInfo = "[\
         {\"name\": \"red\"},\
@@ -18,21 +27,22 @@ MainWindow::MainWindow(QWidget *parent)
     buzzers = doc.array();
 
     QHBoxLayout *groupBoxLayout = new QHBoxLayout;
-    mainLayout->addLayout(groupBoxLayout);
+    rightLayout->addLayout(groupBoxLayout);
 
-    int j = 1;
+    int j = 0;
     QJsonArray::iterator i;
     for (i = buzzers.begin(); i != buzzers.end(); ++i) {
         QJsonObject val = (*i).toObject();
 
         // GroupBox that has the bgcolor of that buzzer
-        QGroupBox *gb = new QGroupBox(tr("Buzzer %1 - %2").arg(j).arg(val["name"].toString().toUpper()));
+        QGroupBox *gb = new QGroupBox(tr("%1 (Chans %2 -> %3)").arg(val["name"].toString().toUpper()).arg(j*60+1).arg(j*60+60));
         gb->setStyleSheet(buttonColorToStyleSheet(val["name"].toString()));
         groupBoxLayout->addWidget(gb);
         QVBoxLayout *gbL = new QVBoxLayout;
         gb->setLayout(gbL);
         // Save pointer to the GroupBox in buzzers object
         val.insert("groupBox", QJsonValue(QString("%1").arg((qint64)gb)));
+
 
         // Label that displays info about that buzzer (from PING packet)
         // bgcolor depends on status
@@ -62,7 +72,7 @@ MainWindow::MainWindow(QWidget *parent)
         val.insert("statusTimer", QJsonValue(QString("%1").arg((qint64)statusTimer)));
 
         // Overwrite the old object with the new one
-        buzzers[j-1] = val;
+        buzzers[j] = val;
 
         j++;
     }
@@ -71,13 +81,15 @@ MainWindow::MainWindow(QWidget *parent)
 
     armedButton = new QPushButton();
     armedButton->setMinimumHeight(60);
-    mainLayout->addWidget(armedButton);
+    rightLayout->addWidget(armedButton);
     connect(armedButton, &QPushButton::clicked, this, &MainWindow::armedButtonClicked);
 
     activeLabel = new QLabel();
     activeLabel->setAlignment(Qt::AlignCenter | Qt::AlignHCenter);
     activeLabel->setMinimumHeight(60);
-    mainLayout->addWidget(activeLabel);
+    rightLayout->addWidget(activeLabel);
+
+    mainLayout->addLayout(rightLayout);
 
     QWidget *centralWidget = new QWidget();
     centralWidget->setLayout(mainLayout);
