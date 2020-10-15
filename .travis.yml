@@ -27,7 +27,7 @@ matrix:
     before_install:
     - dir C:/Program\ Files\ \(x86\)/Windows\ Kits/10/bin/10.0.17134.0/x64
     - cmd.exe /C 'cd && "C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
-      x86 && cd && cd "C:/Users/travis/build/kripton/BuzzerController" && dir'
+      x86 && cd && cd "C:\Users\travis\build\kripton\BuzzerController" && dir'
     - curl -vLO http://download.qt.io/official_releases/online_installers/qt-unified-windows-x86-online.exe
     - "./qt-unified-windows-x86-online.exe --verbose --script qt-installer-windows.qs"
     - ls -la C:/Qt/5.12.3/msvc2017/bin/qtenv2.bat
